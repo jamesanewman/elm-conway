@@ -5,40 +5,138 @@ import Random
 gridRows = 4
 gridCols = 4
 
-type CellState = 
-    Alive
-    | Dead 
+type CellState = Alive | Dead 
+type alias States = List CellState
+type alias Pos = (Int, Int)
+type alias PosState = (Pos, CellState)
+type alias PosStates = List PosState
 
--- Position will hold x,y position
-type alias Position = (Int, Int)
+idxToPos: Int -> Int -> Pos
+idxToPos rows idx =
+    (
+        (idx // rows),
+        (modBy rows idx)
+    )
 
-type alias Cell = 
-    {
-        pos: Position,
-        state: CellState
-    }
+convertToPos = idxToPos gridRows
 
-type alias Model = 
-    {
-        rows: Int,
-        cols: Int,
-        grids: List Cell
-    }
+idxStateToPosState: (Int, CellState) -> PosState
+idxStateToPosState (idx, state) =
+    (convertToPos idx, state)
 
-model = 
-    {
-        rows = gridRows,
-        cols = gridCols,
-        grid = (createGrid gridRows gridCols)
-    } 
-
-convertIndexToPosition: Int -> Int -> Int -> Position
-convertIndexToPosition rows cols index =
+statesToPosStates: States -> PosStates
+statesToPosStates states =
     let
-        col = modBy rows index
-        row = (//) index rows 
+        indexedStates = List.indexedMap Tuple.pair states
     in
-        (col, row)
+        List.map idxStateToPosState indexedStates
+    
+hasPos: List Pos -> PosState -> Bool
+hasPos positions pos =
+    let
+        checkPos = Tuple.first pos
+    in
+        List.member checkPos positions
+
+validPos: Int -> Int -> Pos -> Bool
+validPos rows cols (x, y) =
+    if 
+        (x < 0) || (y < 0) 
+        || ( x >= cols ) || (y >= rows)
+    then
+        False
+    else
+        True
+
+
+extractPositions: List Pos -> PosStates -> PosStates
+extractPositions positions posstates =
+    let
+        isAtPosition = hasPos positions
+    in
+        List.filter isAtPosition posstates
+
+convertToStates: PosStates -> States
+convertToStates postates =
+    List.map Tuple.second postates
+
+
+
+isState: CellState -> PosState -> Bool
+isState state postate =
+    state == (Tuple.second postate)
+    
+isAlive = isState Alive 
+isDead = isState Dead
+
+filterStates: CellState -> PosStates -> PosStates
+filterStates state states =
+    let
+        isTargetState = isState state
+    in
+        List.filter isTargetState states
+
+buildNeighbourList: Pos -> List Pos 
+buildNeighbourList (x, y) =
+    [
+        (x - 1, y - 1),
+        (x - 1, y),
+        (x - 1, y + 1),
+        (x, y - 1),
+        (x, y + 1),
+        (x + 1, y - 1),
+        (x + 1, y),
+        (x + 1, y + 1)
+    ]
+
+updateState: PosState -> Int -> Int -> PosState
+updateState (pos, state) alive dead =
+    if alive > dead then 
+        (pos, Alive)
+    else 
+        (pos, Dead)     
+
+iterate: PosStates -> PosState -> PosState
+iterate states cell =
+    let
+        neighbourList = buildNeighbourList (Tuple.first cell)
+        neighbours = extractPositions neighbourList states
+        aliveNeighbours = List.filter isAlive neighbours
+        deadNeighbours = List.filter isDead neighbours
+    in
+        updateState 
+            cell 
+            (List.length aliveNeighbours) 
+            (List.length deadNeighbours)
+
+iterateGrid: States -> States
+iterateGrid states = 
+    let 
+        pstates = statesToPosStates states
+        updateCell = iterate pstates
+    in
+        List.map updateCell pstates 
+        |> List.map (Tuple.second) 
+
+
+createGrid: Int -> Int -> States
+createGrid rows cols =
+    let
+        size = (rows * cols) - 1
+        -- create a 0 or 1 state
+        seeds = createSeeds size (generateStep initialSeed) []
+    in
+        -- List of dead or alives
+        List.map convertToCellState seeds
+
+convertToCellState: Int -> CellState
+convertToCellState intValue =
+    case intValue of
+
+        1 -> Alive
+
+        _ -> Dead 
+
 
 createSeeds: Int -> (Int, Random.Seed ) -> List Int -> List Int
 createSeeds size seed seeds =
@@ -53,39 +151,6 @@ createSeeds size seed seeds =
             _ -> 
                 createSeeds (size - 1) newSeed (List.append seeds [newValue])
 
--- createSeededRecord: List Position -> List Cell
-createSeededRecord positions =
-    let 
-        bob = positions
-    in
-        List.map (\pos -> { pos = pos }) positions
-
-convertIndexedState: Int -> Int -> (Int , CellState) -> Cell
-convertIndexedState rows cols (idx, state) =
-    { pos= convertIndexToPosition rows cols idx, state = state}
-
-createGrid: Int -> Int -> List Cell
-createGrid rows cols =
-    let
-        size = (rows * cols) - 1
-        -- create a 0 or 1 state
-        seeds = createSeeds size (generateStep initialSeed) []
-        -- List of dead or alives
-        states = List.map convertToCellState seeds
-        -- Turn into tuples (idx, state)
-        indexedStates = List.indexedMap Tuple.pair states
-
-        indexConvertor = convertIndexedState rows cols
-    in
-        List.map indexConvertor indexedStates
-
-convertToCellState: Int -> CellState
-convertToCellState intValue =
-    case intValue of
-
-        1 -> Alive
-
-        _ -> Dead 
 
 initialSeed: Random.Seed
 initialSeed = Random.initialSeed 1000
