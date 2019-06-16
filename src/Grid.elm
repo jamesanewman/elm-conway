@@ -91,10 +91,24 @@ buildNeighbourList (x, y) =
 
 updateState: PosState -> Int -> Int -> PosState
 updateState (pos, state) alive dead =
-    if alive > dead then 
-        (pos, Alive)
-    else 
-        (pos, Dead)     
+    let 
+        newState = case state of 
+            Alive ->
+                if alive < 2 then
+                    Dead
+                else if (alive == 2) || (alive == 3) then
+                    Alive
+                else
+                    Dead
+
+            Dead ->
+                if alive == 3 then
+                    Alive
+                else 
+                    Dead
+    in
+        (pos, newState)
+
 
 iterate: PosStates -> PosState -> PosState
 iterate states cell =
