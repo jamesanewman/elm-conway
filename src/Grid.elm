@@ -194,7 +194,7 @@ Create random number of states
 createGrid: Int -> Int -> States
 createGrid rows cols =
     let
-        size = (rows * cols) - 1
+        size = (rows * cols)
         -- create a 0 or 1 state
         seeds = createSeeds size (generateStep initialSeed) []
     in
@@ -237,3 +237,31 @@ initialSeed = Random.initialSeed 1000
 generateStep: Random.Seed -> (Int, Random.Seed)
 generateStep seed = 
     Random.step (Random.int 0 1) seed
+
+displayRow states = Debug.log "" (Debug.toString states)
+
+textDisplay: Int -> States -> String
+textDisplay cols states = 
+    let
+        row = List.take cols states 
+        rest = List.drop cols states
+    in
+        case row of
+            [] -> 
+                ""
+            _ ->
+                displayRow row ++ (textDisplay cols rest)
+
+displayIterations: Int -> Int -> States -> String
+displayIterations cols iterations initialStates =
+    let 
+        info = Debug.log "Iteration: " iterations
+        text = textDisplay cols initialStates
+        nextStates = iterateGrid initialStates
+    in
+        case iterations of 
+            0 ->
+                "Finished"
+            _ ->
+                displayIterations cols (iterations - 1) nextStates
+
