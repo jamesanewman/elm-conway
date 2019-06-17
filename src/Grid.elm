@@ -34,17 +34,17 @@ convertToPos = idxToPos gridRows
 {--
     Convert (array_index, state) to ((x,y), state)
 --}
-idxStateToPosState: (Int, CellState) -> PosState
-idxStateToPosState (idx, state) =
-    (convertToPos idx, state)
+idxStateToPosState: Int -> (Int, CellState) -> PosState
+idxStateToPosState rows (idx, state) =
+    (idxToPos rows idx, state)
 
 
-statesToPosStates: States -> PosStates
-statesToPosStates states =
+statesToPosStates: Int -> States -> PosStates
+statesToPosStates rows states =
     let
         indexedStates = List.indexedMap Tuple.pair states
     in
-        List.map idxStateToPosState indexedStates
+        List.map (idxStateToPosState rows) indexedStates
     
 {--
     Extract PosStates that are in a list of Pos's.
@@ -164,10 +164,10 @@ Go through a list (that represents a grid) of PosStates
 and update each one based on the update state rules
 - Updated based on neighbour states
 --}
-iterate: PosStates -> PosState -> PosState
-iterate states cell =
+iterate: Int -> Int -> PosStates -> PosState -> PosState
+iterate rows cols states cell =
     let
-        neighbourList = List.filter positionInsideGrid (buildNeighbourList (Tuple.first cell))
+        neighbourList = List.filter (validPos rows cols) (buildNeighbourList (Tuple.first cell))
         neighbours = extractPositions neighbourList states
         aliveNeighbours = List.filter isAlive neighbours
         deadNeighbours = List.filter isDead neighbours
@@ -179,27 +179,38 @@ iterate states cell =
 {--
 Convert Grid to PosStates, update and flatten back again.
 --}
-iterateGrid: States -> States
-iterateGrid states = 
+iterateGrid: Int -> Int -> States -> States
+iterateGrid rows cols states = 
     let 
-        pstates = statesToPosStates states
-        updateCell = iterate pstates
+        pstates = statesToPosStates rows states
+        updateCell = iterate rows cols pstates
     in
         List.map updateCell pstates 
         |> List.map (Tuple.second) 
 
+iterateGridTimes: Int -> Int -> Int -> States -> States
+iterateGridTimes rows cols iterations states =
+    case iterations of 
+        0 -> 
+            states
+        _ -> 
+            iterateGridTimes rows cols (iterations - 1) (iterateGrid rows cols states)
+
 {--
 Create random number of states
+    iterations = how many iterations to perform before returning the frid
 --}
-createGrid: Int -> Int -> States
-createGrid rows cols =
+createGrid: Int -> Int -> Int -> Int -> States
+createGrid startSeed rows cols iterations =
     let
         size = (rows * cols)
         -- create a 0 or 1 state
-        seeds = createSeeds size (generateStep initialSeed) []
-    in
+        seeds = createSeeds size (generateStep (initialSeed startSeed)) []
         -- List of dead or alives
-        List.map convertToCellState seeds
+        initialGrid = List.map convertToCellState seeds
+    in
+        iterateGridTimes rows cols iterations initialGrid        
+
 
 {--
 Take a random int (0,1) and return a state instead
@@ -230,8 +241,8 @@ createSeeds size seed seeds =
 
 
 {-- A intial seed to use to generate the new ones from --}
-initialSeed: Random.Seed
-initialSeed = Random.initialSeed 1000
+initialSeed: Int -> Random.Seed
+initialSeed startValue = Random.initialSeed startValue
 
 {-- Generate new seed from a previous seed --}
 generateStep: Random.Seed -> (Int, Random.Seed)
@@ -252,16 +263,16 @@ textDisplay cols states =
             _ ->
                 displayRow row ++ (textDisplay cols rest)
 
-displayIterations: Int -> Int -> States -> String
-displayIterations cols iterations initialStates =
+displayIterations: Int -> Int -> Int -> States -> String
+displayIterations rows cols iterations initialStates =
     let 
         info = Debug.log "Iteration: " iterations
         text = textDisplay cols initialStates
-        nextStates = iterateGrid initialStates
+        nextStates = iterateGrid rows cols initialStates
     in
         case iterations of 
             0 ->
                 "Finished"
             _ ->
-                displayIterations cols (iterations - 1) nextStates
+                displayIterations rows cols (iterations - 1) nextStates
 
