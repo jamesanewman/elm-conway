@@ -1,15 +1,15 @@
 
 import Browser
 import Html exposing (..)
-import Html.Attributes
+import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 
-import Svg -- exposing (..)
-import Svg.Attributes -- exposing (..)
+import Svg
+import Svg.Attributes
 
 import Time exposing (..)
 import Task exposing (..)
-
+import Json.Decode as Decode -- exposing (..)
 
 import Grid
 
@@ -24,6 +24,7 @@ main =
 
 type alias Model =
     {   
+        startSeed: Int,
         iteration: Int,
         width: Int,
         height: Int,
@@ -45,9 +46,11 @@ init flags =
         startGrid = Grid.createGrid startSeed r c startIteration
     in 
         (
-            Model startIteration 400 400 r c startGrid iterationPause False
+            Model startSeed startIteration 400 400 r c startGrid iterationPause False
             , Cmd.none 
         )
+
+
 
 type Msg
     = Start
@@ -55,12 +58,33 @@ type Msg
     | Pause
     | Iterate
     | UpdateGrid Time.Posix
+    | UpdateIterationPause String
+
+updateMsg: Model -> a -> Model
+updateMsg model msg =
+    let
+        x = Debug.log ">> " msg
+    in
+        model
+    
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
         Start ->
-            (model, Cmd.none)
+            (
+                {
+                    startSeed = model.startSeed,
+                    iteration = 1,
+                    width = model.width,
+                    height = model.height,
+                    rows = model.rows,
+                    cols = model.rows,
+                    grid = Grid.createGrid model.startSeed model.rows model.cols 1,
+                    autoIterate = model.autoIterate,
+                    paused = model.paused
+                }    
+            , Cmd.none)
 
         Stop ->
             (model, Cmd.none)
@@ -68,6 +92,12 @@ update msg model =
         Pause ->
             ( {model | paused = not model.paused}, Cmd.none)
 
+        UpdateIterationPause x ->
+            
+            (
+                updateMsg model x,
+                Cmd.none
+            )
         Iterate ->
             (
                 { 
@@ -86,7 +116,15 @@ update msg model =
                         , iteration = (model.iteration + 1) 
                 },
                 Cmd.none
-            )        
+            )
+
+        -- UpdateIterationPause interval ->
+        --     (
+        --         {model | autoIterate = interval}
+        --         , Cmd.none
+        --     )
+
+           
 subscriptions : Model -> Sub Msg
 subscriptions model =
     case model.autoIterate of 
@@ -102,17 +140,80 @@ view : Model -> Html Msg
 view model =
     div []
         [ 
+            headerPanel
+            , div
+                [
 
-            h1 
-                [] 
-                [ 
-                    Html.text (String.fromInt model.iteration) 
                 ]
-            , drawGrid model model.grid
-            , button [ onClick Iterate ] [ Html.text "Iterate" ]
-            , button [ onClick Pause ] [ if model.paused then Html.text "Restart Iterating" else Html.text "Pause Iterating" ]
+                [
+                    div 
+                        [
+                            style "outline" "1px solid black"
+                        ]
+                        [
+                            drawGrid model model.grid
+                        ]
+
+                    , div 
+                        [
+
+                        ]
+                        [
+                            displayModel model
+                        ]
+                ]
+            , controlPanel model
         ]  
 
+onBlurWithTargetValue : (String -> msg) -> Attribute msg
+onBlurWithTargetValue tagger =
+    on "blur" (Decode.map tagger targetValue)
+
+
+displayModel: Model -> Html Msg 
+displayModel model =
+    div 
+        [
+            style "float" "right"
+        ]
+        [
+            p [] [ Html.text ("Iteration: " ++ (String.fromInt model.iteration)) ]
+            , p 
+                []
+                [
+                    text "Iteration pause: ",
+                    input 
+                        [
+                            attribute "type" "number"
+                            ,attribute "value" (String.fromInt model.autoIterate)
+                            , attribute "step" "1000"
+                            , onInput UpdateIterationPause  -- on "blur" onBlurWithTargetValue
+                                
+                        ]
+                        []
+                ]
+        ]
+
+
+
+headerPanel: Html Msg 
+headerPanel = 
+    h1 
+        [] 
+        [ 
+            Html.text "Game of life" 
+        ]
+
+controlPanel: Model -> Html Msg
+controlPanel model = 
+    div
+        []
+        [
+            button [ onClick Start ] [ Html.text "Start" ]
+            , button [ onClick Iterate ] [ Html.text "Iterate" ]
+            , button [ onClick Pause ] [ if model.paused then Html.text "Restart Iterating" else Html.text "Pause Iterating" ]
+        ]
+drawGrid: Model -> Grid.States -> Html Msg
 drawGrid model grid =   
     let 
         posGrid = Grid.statesToPosStates model.rows grid
