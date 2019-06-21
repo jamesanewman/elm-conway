@@ -22,6 +22,24 @@ main =
             , subscriptions = subscriptions
         }
 
+-- 
+type alias HistoryItem = 
+    {
+        seed: Int,
+        iteration: Int,
+        rows: Int,
+        cols: Int,
+        grid: Grid.States
+    }
+
+addToHistory: Model -> Model
+addToHistory model =
+    let
+        item = HistoryItem model.startSeed model.iteration model.rows model.cols model.grid
+        history = item :: model.history
+    in
+        { model | history = history}
+
 type alias Model =
     {   
         startSeed: Int,
@@ -33,6 +51,7 @@ type alias Model =
         grid: Grid.States,
         autoIterate: Int,
         paused: Bool
+        history: List HistoryItem
     }
 
 init : () -> (Model, Cmd Msg)
