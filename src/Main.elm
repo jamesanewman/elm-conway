@@ -59,6 +59,7 @@ type Msg
     | Iterate
     | UpdateGrid Time.Posix
     | UpdateIterationPause String
+    | UpdateSeed String
 
 updateMsg: Model -> a -> Model
 updateMsg model msg =
@@ -67,7 +68,18 @@ updateMsg model msg =
     in
         model
     
-
+stringToInt: String -> Int
+stringToInt str = 
+    let
+        asInt = String.toInt str
+    in
+        case asInt of 
+            Just i ->
+                i
+            
+            _ ->
+                0
+    
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
@@ -92,10 +104,16 @@ update msg model =
         Pause ->
             ( {model | paused = not model.paused}, Cmd.none)
 
-        UpdateIterationPause x ->
+        UpdateSeed seedString ->
+            (
+                { model | startSeed = (stringToInt seedString)}
+                , Cmd.none
+            )
+
+        UpdateIterationPause pauseString ->
             
             (
-                updateMsg model x,
+                { model | autoIterate = (stringToInt pauseString)},
                 Cmd.none
             )
         Iterate ->
@@ -188,6 +206,20 @@ displayModel model =
                             ,attribute "value" (String.fromInt model.autoIterate)
                             , attribute "step" "1000"
                             , onInput UpdateIterationPause  -- on "blur" onBlurWithTargetValue
+                                
+                        ]
+                        []
+                ]
+            , p 
+                []
+                [
+                    text "Start Seed: ",
+                    input 
+                        [
+                            attribute "type" "number"
+                            ,attribute "value" (String.fromInt model.startSeed)
+                            , attribute "step" "1000"
+                            , onInput UpdateSeed  -- on "blur" onBlurWithTargetValue
                                 
                         ]
                         []
