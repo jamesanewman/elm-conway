@@ -35,6 +35,7 @@ type alias HistoryItem =
 addToHistory: Model -> Model
 addToHistory model =
     let
+        msg = Debug.log "Current Restore point " model.currentRestorePoint
         item = HistoryItem model.startSeed model.iteration model.rows model.cols model.grid
         history = item :: model.history
     in
@@ -50,22 +51,24 @@ type alias Model =
         cols: Int,
         grid: Grid.States,
         autoIterate: Int,
-        paused: Bool
-        history: List HistoryItem
+        paused: Bool,
+        history: List HistoryItem,
+        currentRestorePoint: (Int, Int)
     }
 
 init : () -> (Model, Cmd Msg)
 init flags =
     let
-        r = 10
-        c = 10
+        r = 50
+        c = 50
         iterationPause = 1000 -- 0 = none
-        startSeed = 2000
+        startSeed = 9900
         startIteration = 4
         startGrid = Grid.createGrid startSeed r c startIteration
+        newModel = Model startSeed startIteration 400 400 r c startGrid iterationPause False [] (startSeed, startIteration)
     in 
         (
-            Model startSeed startIteration 400 400 r c startGrid iterationPause False
+            addToHistory newModel
             , Cmd.none 
         )
 
@@ -74,7 +77,10 @@ init flags =
 type Msg
     = Start
     | Stop
+    | Save
     | Pause
+    | SaveRestorePoint String
+    | Restore
     | Iterate
     | UpdateGrid Time.Posix
     | UpdateIterationPause String
@@ -98,7 +104,59 @@ stringToInt str =
             
             _ ->
                 0
-    
+createRestorePoint: Int -> Int -> String 
+createRestorePoint startSeed iteration =
+    ((String.fromInt startSeed) ++ ("_" ++ (String.fromInt iteration)))
+
+isTargetRestorePoint: Int -> Int -> HistoryItem -> Bool
+isTargetRestorePoint seed iteration history =
+    if seed == history.seed && iteration == history.iteration then
+        True
+    else 
+        False
+
+addRestorePoint: Model -> String -> Model 
+addRestorePoint model historyId =
+    let
+        info = String.split "_" historyId
+        
+    in
+        case info of 
+            [seed, iteration] ->
+                { model | currentRestorePoint = ((Maybe.withDefault 0 (String.toInt seed)), (Maybe.withDefault 0 (String.toInt iteration)))}
+
+            _ -> 
+                model
+
+updateModelWithHistory: Model -> HistoryItem -> Model 
+updateModelWithHistory model history =
+    let
+        updatedModel =
+            { 
+                model
+                | startSeed = history.seed
+                , iteration = history.iteration
+                , grid = history.grid
+            }
+        
+    in
+        updatedModel
+
+restoreModel: Model -> Model 
+restoreModel model =
+    let
+        (seed, iteration) = model.currentRestorePoint
+        matches = isTargetRestorePoint seed iteration
+        match = List.filter matches model.history
+        
+    in
+        case match of 
+            [history] ->
+                updateModelWithHistory model history 
+
+            _ ->
+                model
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
@@ -113,15 +171,33 @@ update msg model =
                     cols = model.rows,
                     grid = Grid.createGrid model.startSeed model.rows model.cols 1,
                     autoIterate = model.autoIterate,
-                    paused = model.paused
+                    paused = model.paused,
+                    history = [],
+                    currentRestorePoint = (model.startSeed, model.iteration)
                 }    
             , Cmd.none)
 
         Stop ->
             (model, Cmd.none)
 
+        Save ->
+            (
+                addToHistory model,
+                Cmd.none
+            )
         Pause ->
             ( {model | paused = not model.paused}, Cmd.none)
+
+        Restore ->
+            (
+                restoreModel model ,
+                Cmd.none
+            )
+        SaveRestorePoint historyId ->
+            (
+                (addRestorePoint model historyId),
+                Cmd.none
+            )
 
         UpdateSeed seedString ->
             (
@@ -214,7 +290,30 @@ displayModel model =
             style "float" "right"
         ]
         [
-            p [] [ Html.text ("Iteration: " ++ (String.fromInt model.iteration)) ]
+            h2 [] [ Html.text "History"],
+            select 
+                [
+                    onInput SaveRestorePoint
+                ]
+                (
+                    List.map (
+                        \h -> 
+                            let
+                              id = createRestorePoint h.seed h.iteration  
+                            in                           
+                                option 
+                                    [ 
+                                        value id
+                                    ] 
+                                    [
+                                        Html.text id
+                                    ]
+                    ) 
+                    model.history
+                )
+            , button [ onClick Restore ] [ Html.text "Rerun history" ]
+            , hr [] []
+            , p [] [ Html.text ("Iteration: " ++ (String.fromInt model.iteration)) ]
             , p 
                 []
                 [
@@ -263,6 +362,7 @@ controlPanel model =
             button [ onClick Start ] [ Html.text "Start" ]
             , button [ onClick Iterate ] [ Html.text "Iterate" ]
             , button [ onClick Pause ] [ if model.paused then Html.text "Restart Iterating" else Html.text "Pause Iterating" ]
+           , button [ onClick Save ] [ Html.text "Save" ]
         ]
 drawGrid: Model -> Grid.States -> Html Msg
 drawGrid model grid =   
