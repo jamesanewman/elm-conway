@@ -15,6 +15,8 @@ type alias Pos = (Int, Int)
 type alias PosState = (Pos, CellState)
 type alias PosStates = List PosState
 
+---- Index to Coordinate conversions
+
 {--
 Convert an array index to x,y position
 --}
@@ -25,17 +27,11 @@ idxToPos rows idx =
         (modBy rows idx)
     )
 
-{-- 
-Paritally applied version of idxToPos,
-Probably need to do this via the model eventually
---}
-convertToPos = idxToPos gridRows
-
 {--
     Convert (array_index, state) to ((x,y), state)
 --}
-idxStateToPosState: Int -> (Int, CellState) -> PosState
-idxStateToPosState rows (idx, state) =
+idxToPosState: Int -> (Int, CellState) -> PosState
+idxToPosState rows (idx, state) =
     (idxToPos rows idx, state)
 
 
@@ -43,8 +39,9 @@ statesToPosStates: Int -> States -> PosStates
 statesToPosStates rows states =
     let
         indexedStates = List.indexedMap Tuple.pair states
+        convertToPosState = idxToPosState rows
     in
-        List.map (idxStateToPosState rows) indexedStates
+        List.map convertToPosState indexedStates
     
 {--
     Extract PosStates that are in a list of Pos's.
@@ -69,11 +66,6 @@ validPos rows cols (x, y) =
         False
     else
         True
-
-{--
-    Partially apply the grid rows, cols values.
---}
-positionInsideGrid = validPos gridRows gridCols
 
 {--
     Given a list of posstates extract just the ones in
@@ -159,10 +151,46 @@ updateState (pos, state) alive dead =
     in
         (pos, newState)
 
+updateState2: CellState -> Int -> Int -> CellState
+updateState2 state alive dead =
+    let 
+        newState = case state of 
+            Alive ->
+                if alive < 2 then
+                    Dead
+                else if (alive == 2) || (alive == 3) then
+                    Alive
+                else
+                    Dead
+
+            Dead ->
+                if alive == 3 then
+                    Alive
+                else 
+                    Dead
+    in
+        newState
+
 {--
 Go through a list (that represents a grid) of PosStates
 and update each one based on the update state rules
 - Updated based on neighbour states
+
+Start point
+name            runs / second
+Original 1      85,440,993
+New 1           88,640,752
+Original 5      88,266,707
+New 5           88,974,565
+Original 10     89,513,076
+New 10          88,978,547
+
+
+
+
+
+
+
 --}
 iterate: Int -> Int -> PosStates -> PosState -> PosState
 iterate rows cols states cell =
@@ -175,7 +203,18 @@ iterate rows cols states cell =
         updateState 
             cell 
             (List.length aliveNeighbours) 
-            (List.length deadNeighbours)
+            (List.length deadNeighbours) 
+
+iterate2: Int -> Int -> PosStates -> PosState -> CellState
+iterate2 rows cols states (cellPos, cellState) =
+    let
+        isValidPosition = validPos rows cols 
+        neighbourList = List.filter isValidPosition (buildNeighbourList cellPos)
+        neighbours = extractPositions neighbourList states
+        (aliveNeighbours, deadNeighbours) = List.partition isAlive neighbours
+    in
+        updateState2 cellState  (List.length aliveNeighbours) (List.length deadNeighbours)
+         
 {--
 Convert Grid to PosStates, update and flatten back again.
 --}
@@ -188,6 +227,18 @@ iterateGrid rows cols states =
         List.map updateCell pstates 
         |> List.map (Tuple.second) 
 
+{--
+2-3 % improvement by coverting to state in iterate function
+--}
+iterateGrid2: Int -> Int -> States -> States
+iterateGrid2 rows cols states = 
+    let 
+        pstates = statesToPosStates rows states
+        updateCell = iterate2 rows cols pstates
+    in
+        List.map updateCell pstates 
+        
+
 iterateGridTimes: Int -> Int -> Int -> States -> States
 iterateGridTimes rows cols iterations states =
     case iterations of 
@@ -195,6 +246,23 @@ iterateGridTimes rows cols iterations states =
             states
         _ -> 
             iterateGridTimes rows cols (iterations - 1) (iterateGrid rows cols states)
+
+{-- 
+Start Point very slow.
+name        runs / second
+Original 1  272
+New 1       269
+
+
+--}
+iterateGridTimes2: Int -> Int -> Int -> States -> States
+iterateGridTimes2 rows cols iterations states =
+    let
+        calcNextStateFrom = iterateGrid2 rows cols 
+        iterator = (\_ currentState -> calcNextStateFrom currentState)
+    in
+    
+        List.foldl iterator states (List.range 0 iterations)
 
 {--
 Create random number of states
@@ -205,11 +273,23 @@ createGrid startSeed rows cols iterations =
     let
         size = (rows * cols)
         -- create a 0 or 1 state
-        seeds = createSeeds size (generateStep (initialSeed startSeed)) []
+        seeds = createSeeds size (generateStep (initialSeed startSeed))
         -- List of dead or alives
         initialGrid = List.map convertToCellState seeds
     in
         iterateGridTimes rows cols iterations initialGrid        
+
+createGridOpt: Int -> Int -> Int -> Int -> States
+createGridOpt startSeed rows cols iterations =
+    let
+        size = (rows * cols)
+        -- create a 0 or 1 state
+        seeds = createSeeds size (generateStep (initialSeed startSeed))
+        -- List of dead or alives
+        initialGrid = List.map convertToCellState seeds
+    in
+        iterateGridTimes rows cols iterations initialGrid        
+
 
 
 {--
@@ -226,8 +306,8 @@ convertToCellState intValue =
 {--
 Generate list of seed ints (0,1) for the grid
 --}
-createSeeds: Int -> (Int, Random.Seed ) -> List Int -> List Int
-createSeeds size seed seeds =
+createSeedsOld: Int -> (Int, Random.Seed ) -> List Int -> List Int
+createSeedsOld size seed seeds =
     let 
         -- Extract the seed
         newSeed = generateStep (Tuple.second seed)
@@ -237,7 +317,35 @@ createSeeds size seed seeds =
             0 -> 
                 seeds
             _ -> 
-                createSeeds (size - 1) newSeed (List.append seeds [newValue])
+                createSeedsOld (size - 1) newSeed (List.append seeds [newValue])
+
+{--
+
+Destructure tuple in call 
+    + val :: createSeeds2 (size - 1) newSeed
+    vs createSeeds (size - 1) newSeed (List.append seeds [newValue])
+
+    - Destructuring maybe a bit slower
+name            runs / second
+Original 1      6,099,462
+Updated 1       7,586,293
+Original 10     671,120
+Updated 10      1,941,066
+Original 20     208,240
+Updated 20      1,044,817
+
+--}
+createSeeds: Int -> (Int, Random.Seed) -> List Int
+createSeeds size (val, seed) =
+    let 
+        -- Extract the seed
+        newSeed = generateStep seed
+    in
+        case size of
+            0 -> 
+                []
+            _ -> 
+                val :: createSeeds (size - 1) newSeed
 
 
 {-- A intial seed to use to generate the new ones from --}
