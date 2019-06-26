@@ -10,7 +10,8 @@ import Svg.Attributes
 import Time exposing (..)
 import Task exposing (..)
 import Json.Decode as Decode -- exposing (..)
-
+import Canvas as Canvas
+import Color  exposing (Color)
 import Grid
 
 main =
@@ -59,8 +60,8 @@ type alias Model =
 init : () -> (Model, Cmd Msg)
 init flags =
     let
-        r = 50
-        c = 50
+        r = 40
+        c = 40
         iterationPause = 1000 -- 0 = none
         startSeed = 9900
         startIteration = 4
@@ -159,7 +160,7 @@ restoreModel model =
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
-    case msg of
+    case Debug.log "update" msg of
         Start ->
             (
                 {
@@ -265,6 +266,7 @@ view model =
                         ]
                         [
                             drawGrid model model.grid
+                            -- drawCanvasGrid model model.grid
                         ]
 
                     , div 
@@ -364,6 +366,53 @@ controlPanel model =
             , button [ onClick Pause ] [ if model.paused then Html.text "Restart Iterating" else Html.text "Pause Iterating" ]
            , button [ onClick Save ] [ Html.text "Save" ]
         ]
+
+drawCanvasGrid: Model -> Grid.States -> Html Msg
+drawCanvasGrid model states =
+    let
+        posGrid = Grid.statesToPosStates model.rows states
+        cellWidth = model.width // model.cols
+        cellHeight = model.height // model.rows
+        -- renderer = renderSquare cellWidth cellHeight
+        renderedCells = renderCells cellWidth cellHeight posGrid
+        -- log = Debug.log "Rendered cells: " renderedCells
+    in    
+        Canvas.toHtml 
+            (model.width, model.height)
+            [
+                style "border" "5px solid black"
+            ]
+            -- renderedCells
+            [
+
+                    Canvas.shapes [ Canvas.fill Color.green ] [ Canvas.rect (0, 0) (toFloat model.width) (toFloat model.height) ],
+                    Canvas.shapes [ Canvas.fill Color.blue ] [ Canvas.rect (10,10) 200 200 ]
+            ]
+
+renderCells: Int -> Int -> Grid.PosStates -> List Canvas.Renderable
+renderCells w h states =
+
+    List.map 
+        (
+            \stateInfo -> 
+                let
+                    (pos, state) = stateInfo
+                    (x, y) = pos
+                    displayColor = case state of
+                        Grid.Alive ->
+                            Color.lightBlue
+                        _ ->
+                            Color.darkGreen
+                    coord = (toFloat (x * w), toFloat (y*h))
+                in
+                
+                    Canvas.shapes 
+                        [ Canvas.fill displayColor ]
+                        [ Canvas.rect coord (toFloat w) (toFloat h) ]
+        )
+        states
+
+
 drawGrid: Model -> Grid.States -> Html Msg
 drawGrid model grid =   
     let 

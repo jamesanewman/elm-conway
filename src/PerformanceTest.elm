@@ -5,7 +5,7 @@ import Benchmark.Reporting exposing (fromBenchmark)
 import Benchmark exposing (benchmark, Benchmark, scale )
 import Benchmark as B2
 import Grid as Grid
-
+import DictGrid
 
 main : BenchmarkProgram
 main =
@@ -17,7 +17,10 @@ seeds =
     in
         Grid.createGrid 1000 10 10 1
 
-posseeds = Grid.statesToPosStates 10 seeds
+rows = 10
+cols = rows
+posseeds = Grid.statesToPosStates (rows * cols) seeds
+dggrid = DictGrid.buildGrid 1000 (rows * cols)
 
 iterateGridTimes size =
     [
@@ -31,11 +34,11 @@ iterateGrid size =
         (("New " ++ String.fromInt size), runIteration (Grid.iterateGrid2 10 10 seeds))
     ]
 
-iterate size =
-    [
-        (("Original " ++ String.fromInt size), runIteration (Grid.iterate 10 10 posseeds ((3,3), Grid.Alive))),
-        (("New " ++ String.fromInt size), runIteration (Grid.iterate 10 10 posseeds ((3,3), Grid.Alive)))
-    ]
+-- iterate size =
+--     [
+--         (("Original " ++ String.fromInt size), runIteration (Grid.iterate 10 10 posseeds ((3,3), Grid.Alive))),
+--         (("New " ++ String.fromInt size), runIteration (DictGrid.iterate dggrid))
+--     ]
 
 createSeeds size = 
     [
@@ -57,10 +60,15 @@ runBench size = (String.fromInt size, \_ -> Grid.createSeeds size (Grid.generate
 suite = 
     Benchmark.describe "Seed creation"
         [
-            scale "State Creation" (List.concat (List.map createSeeds  [1, 10, 20]))
-            , scale "Grid Iteration (Times) " (List.concat (List.map iterateGridTimes  [1, 5, 10]))
-            , scale "Grid Iteration" (List.concat (List.map iterateGrid  [1, 5, 10]))
-            , scale "Iteration" (List.concat (List.map iterate [1, 5, 10]))
+            --scale "State Creation" (List.concat (List.map createSeeds  [1, 10, 20]))
+            --, scale "Grid Iteration (Times) " (List.concat (List.map iterateGridTimes  [1, 5, 10]))
+            --, scale "Grid Iteration" (List.concat (List.map iterateGrid  [1, 5, 10]))
+            --scale "Iteration" (List.concat (List.map iterate [1, 5, 10]))
+            Benchmark.compare "Dictionary vs list grid"
+                "List: " (\_ -> (Grid.iterateGrid rows cols seeds))
+                "Dict: " (\_ -> (DictGrid.iterate dggrid))
+            -- Benchmark.benchmark "List " <| (\_ -> (Grid.iterateGrid 3 3 seeds)),
+            -- Benchmark.benchmark "List " <| (\_ -> (DictGrid.iterate dggrid))
         ]
         
 --             Benchmark.compare "Create grid benchmarks"

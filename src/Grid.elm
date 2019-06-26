@@ -78,6 +78,17 @@ extractPositions positions posstates =
     in
         List.filter isAtPosition posstates
 
+-- hasPos2: PosStates -> Pos -> Bool
+-- hasPos2 states (pos, state) =
+--     let
+--         positions = List.map Tuple.first states
+--     in
+--         List.member pos positions
+
+extractPositions2: List Pos -> PosStates -> PosStates
+extractPositions2 positions posstates =
+        extractPositions positions posstates
+
 {--
     Change PosStates to States
 --}
@@ -210,7 +221,7 @@ iterate2 rows cols states (cellPos, cellState) =
     let
         isValidPosition = validPos rows cols 
         neighbourList = List.filter isValidPosition (buildNeighbourList cellPos)
-        neighbours = extractPositions neighbourList states
+        neighbours = extractPositions2 neighbourList states
         (aliveNeighbours, deadNeighbours) = List.partition isAlive neighbours
     in
         updateState2 cellState  (List.length aliveNeighbours) (List.length deadNeighbours)
